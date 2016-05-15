@@ -101,7 +101,11 @@ func main() {
 //	Init Function - Called when the user deploys the chaincode																	
 //==============================================================================================================================
 func (t *Chaincode) Init(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
-	return nil, nil
+	//authenticate the user
+    //caller_ecert, caller_role, err := t.get_user_data(stub, args[0])
+    //if err != nil { return nil, err }
+    
+    return nil, nil
 }
 
 //=================================================================================================================================	
@@ -109,6 +113,10 @@ func (t *Chaincode) Init(stub *shim.ChaincodeStub, function string, args []strin
 //  		initial arguments passed are passed on to the called function.
 //=================================================================================================================================	
 func (t *Chaincode) Query(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
+    //authenticate the user
+    //caller_ecert, caller_role, err := t.get_user_data(stub, args[0])
+    //if err != nil { return nil, err }
+
 	return nil, nil
 }
 
@@ -117,6 +125,10 @@ func (t *Chaincode) Query(stub *shim.ChaincodeStub, function string, args []stri
 //		     initial arguments passed to other things for use in the called function e.g. name -> ecert
 //==============================================================================================================================
 func (t *Chaincode) Invoke(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
+    //authenticate the user
+    //caller_ecert, caller_role, err := t.get_user_data(stub, args[0])
+    //if err != nil { return nil, err }
+
 	return nil, nil
 }
 
@@ -127,11 +139,13 @@ func (t *Chaincode) Invoke(stub *shim.ChaincodeStub, function string, args []str
 //					 name passed.
 //==============================================================================================================================
 func (t *Chaincode) get_user_data(stub *shim.ChaincodeStub, name string) ([]byte, int64, error){
+    //get the ecert
     ecert, err := t.get_ecert(stub, name);
     if err != nil {
         return nil, -1, errors.New("Could not find ecert for user: "+name)
     }
 
+    //get the role
     role, err := t.check_role(stub,[]string{string(ecert)});
     if err != nil {
         return nil, -1, err
@@ -147,20 +161,20 @@ func (t *Chaincode) get_user_data(stub *shim.ChaincodeStub, name string) ([]byte
 func (t *Chaincode) check_role(stub *shim.ChaincodeStub, args []string) (int64, error) {																							
     ECertSubjectRole := asn1.ObjectIdentifier{2, 1, 3, 4, 5, 6, 7}																														
 
-    // make % etc normal
+    //make % etc normal
     decodedCert, err := url.QueryUnescape(args[0]);
     if err != nil { return -1, errors.New("Could not decode certificate") }
 
-    // Make Plain text
+    //make plain text
     pem, _ := pem.Decode([]byte(decodedCert))
 
-    // Extract Certificate from argument
+    //extract certificate from argument
     x509Cert, err := x509.ParseCertificate(pem.Bytes);
     if err != nil {
         return -1, errors.New("Couldn't parse certificate")
     }
 
-    // Get Role out of Certificate and return it
+    //get role out of certificate and return it
     var role int64
     for _, ext := range x509Cert.Extensions {
         if reflect.DeepEqual(ext.Id, ECertSubjectRole) {
@@ -180,20 +194,20 @@ func (t *Chaincode) check_role(stub *shim.ChaincodeStub, args []string) (int64, 
 // 				common name and returns it
 //==============================================================================================================================
 func (t *Chaincode) get_user(stub *shim.ChaincodeStub, encodedCert string) (string, error) {
-    // make % etc normal 
+    //make % etc normal 
     decodedCert, err := url.QueryUnescape(encodedCert);
     if err != nil {
         return "", errors.New("Could not decode certificate")
     }
 
-    // Make Plain text
+    //make plain text
     pem, _ := pem.Decode([]byte(decodedCert))
     x509Cert, err := x509.ParseCertificate(pem.Bytes);
     if err != nil {
         return "", errors.New("Couldn't parse certificate")
     }
 
-    // return the user from the certificate
+    //return the user from the certificate
     return x509Cert.Subject.CommonName, nil
 }
 
@@ -204,22 +218,22 @@ func (t *Chaincode) get_user(stub *shim.ChaincodeStub, encodedCert string) (stri
 func (t *Chaincode) get_ecert(stub *shim.ChaincodeStub, name string) ([]byte, error) {	
     var cert ECertResponse
 
-    // Calls out to the HyperLedger REST API to get the ecert of the user with that name
+    //call out to the hyperLedger rest api to get the ecert of the user with that name
     response, err := http.Get("BLC_API_URL/registrar/"+name+"/ecert")
     if err != nil {
         return nil, errors.New("Could not get ecert")
     }
 
-    // use the defer construct to close the stream after the method completes
+    //use the defer construct to close the stream after the method completes
     defer response.Body.Close()
 
-    // Read the response from the http callout into the variable contents
+    //read the response from the http callout into the variable contents
     contents, err := ioutil.ReadAll(response.Body)
     if err != nil {
         return nil, errors.New("Could not read body")
     }
 
-    // unmarshall the contents of the certificate
+    //unmarshall the contents of the certificate
     err = json.Unmarshal(contents, &cert)
     if err != nil {
         return nil, errors.New("ECert not found for user: "+name)
