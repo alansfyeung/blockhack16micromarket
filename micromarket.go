@@ -28,7 +28,8 @@ const   PROPERTY_STATE_PROPOSED      =  0
 const   PROPERTY_STATE_MANAGED       =  1
 const   PROPERTY_STATE_RECLAIMED     =  2
 
-const   ACCOUNT_STATE_INACTIVE     =  0
+const   ACCOUNT_STATE_ACTIVE       =  0
+const   ACCOUNT_STATE_INACTIVE     =  1
 
 const   LOG_DEBUG           =  0
 const   LOG_INFO            =  1
@@ -51,10 +52,11 @@ type Chaincode struct {
 }
 
 //==============================================================================================================================
-//    Log - A blank struct to use as simple Logger entry point
+//    Log - A blank struct to use as simple stateless logger
 //==============================================================================================================================
 type Log struct {
 }
+var log Log
 
 //==============================================================================================================================
 //    Property - Defines the structure for a property object. JSON on right tells it what JSON fields to map to
@@ -121,7 +123,7 @@ type ECertResponse struct {
 //=================================================================================================================================
 func main() {
     err := shim.Start(new(Chaincode))
-    if checkErrors(&err){fmt.Printf("Error starting Chaincode: %s", err)}
+    if checkErrors(err){fmt.Printf("Error starting Chaincode: %s", err)}
 }
 
 //==============================================================================================================================
@@ -130,9 +132,17 @@ func main() {
 func (t *Chaincode) Init(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
     //authenticate the user
     //caller_ecert, caller_role, err := t.get_user_data(stub, args[0])
-    //if checkErrors(&err){return nil, err}
+    //if checkErrors(err){return nil, err}
+    
+    log.debug("Create an issuers account for Cardy and Co first up.")
+    var issuerAccount Account
+    issuerAccount.ID = "cardy"
+    issuerAccount.Cash = 100000
+    issuerAccount.Status = ACCOUNT_STATE_ACTIVE
+    err := issuerAccount.save(stub)
+    if checkErrors(err){fmt.Printf("Error starting Chaincode: %s", err)}
 
-    return nil, nil
+    return nil, err
 }
 
 //=================================================================================================================================    
@@ -142,9 +152,23 @@ func (t *Chaincode) Init(stub *shim.ChaincodeStub, function string, args []strin
 func (t *Chaincode) Query(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
     //authenticate the user
     //caller_ecert, caller_role, err := t.get_user_data(stub, args[0])
-    //if checkErrors(&err){return nil, err}
+    //if checkErrors(err){return nil, err}
 
-    return nil, nil
+    A := args[0]
+
+	// Get the state from the ledger
+	Avalbytes, err := stub.GetState(A)
+	if err != nil {
+		jsonResp := "{\"Error\":\"Failed to get state for " + A + "\"}"
+		return nil, errors.New(jsonResp)
+	}
+
+    if Avalbytes == nil {
+		jsonResp := "{\"Error\":\"Nil amount for " + A + "\"}"
+		return nil, errors.New(jsonResp)
+	}
+
+	return Avalbytes, nil
 }
 
 //==============================================================================================================================
@@ -154,7 +178,7 @@ func (t *Chaincode) Query(stub *shim.ChaincodeStub, function string, args []stri
 func (t *Chaincode) Invoke(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
     //authenticate the user
     //caller_ecert, caller_role, err := t.get_user_data(stub, args[0])
-    //if checkErrors(&err){return nil, err}
+    //if checkErrors(err){return nil, err}
 
     return nil, nil
 }
@@ -175,28 +199,32 @@ func (t *Chaincode) issueProperty(stub *shim.ChaincodeStub, args []string) error
     //    }
     //
 
-    //need one arg
+    log.debug("check issueProperty args")
     if len(args) != 1 {return errors.New("Incorrect number of arguments. Expecting property json")}
 
+    log.debug("unmarshalling " + args[0])
     property, err := unmarshalProperty([]byte(args[0]))
-    if checkErrors(&err){return err}
+    if checkErrors(err){return err}
     
+    log.debug("creating the property in the blockchain")
     err = property.create(stub)
-    if checkErrors(&err){return err}
+    if checkErrors(err){return err}
     
+    log.debug("get the account for the issuer " + property.Issuer)
     issuerAccount, err := getAccount(stub, property.Issuer)
-    if checkErrors(&err){return err}
+    if checkErrors(err){return err}
 
-    // Set the issuer to be the owner of all quantity
+    log.debug("Set the issuer to be the owner of all units")
     var issuerHolding Holding
     issuerHolding.Entity = property.ID
     issuerHolding.Units = property.Units
     issuerAccount.Holdings = append(issuerAccount.Holdings, issuerHolding)
 
+    log.debug("save the issuer's account")
     err = issuerAccount.save(stub)
-    if checkErrors(&err){return err}
+    if checkErrors(err){return err}
 
-    //update the property view of the world
+    log.debug("now create an account for the property with an initial view of the holdings")
     var propertyAccount Account
     propertyAccount.ID = property.ID
     propertyAccount.Cash = 0
@@ -207,9 +235,9 @@ func (t *Chaincode) issueProperty(stub *shim.ChaincodeStub, args []string) error
     propertyAccount.Holdings = append(propertyAccount.Holdings, propertyHolding)
     
     err = propertyAccount.create(stub)
-    if checkErrors(&err){return err}
+    if checkErrors(err){return err}
     
-    //info("Issued property " + property.ID)
+    log.info("Issued property " + property.ID)
 
     return nil
 }
@@ -222,22 +250,22 @@ func (t *Chaincode) issueProperty(stub *shim.ChaincodeStub, args []string) error
 func getProperty(stub *shim.ChaincodeStub, id string) (Property, error) {
     var object Property
     bytes, err := stub.GetState(PROPERTY_PREFIX + id)
-    if checkErrors(&err){return object, errors.New("Couldn't retrieve property for " + id)}
+    if checkErrors(err){return object, errors.New("Couldn't retrieve property for " + id)}
 
     object, err = unmarshalProperty(bytes)
-    if checkErrors(&err){return object, err}
+    if checkErrors(err){return object, err}
 
     return object, nil
 }
 
 func (object *Property) create(stub *shim.ChaincodeStub) error {
     err := object.validate()
-    if checkErrors(&err){return err}
+    if checkErrors(err){return err}
 
     if object.ID != "" {return errors.New("Can't create property with ID already assigned")}
 
     existing, err := getProperty(stub, object.ID)
-    if checkErrors(&err){return err}
+    if checkErrors(err){return err}
     if existing.ID != "" {return errors.New("A property with this ID already exists")}
 
     return object.save(stub)
@@ -245,17 +273,17 @@ func (object *Property) create(stub *shim.ChaincodeStub) error {
 
 func (object *Property) save(stub *shim.ChaincodeStub) error {
     bytes, err := object.marshal()
-    if checkErrors(&err){return err}
+    if checkErrors(err){return err}
     
     err = stub.PutState(PROPERTY_PREFIX + object.ID, bytes)
-    if checkErrors(&err){return errors.New("Couldn't save property for " + object.ID + " " + object.AddressLine)}
+    if checkErrors(err){return errors.New("Couldn't save property for " + object.ID + " " + object.AddressLine)}
 
     return nil
 }
 
 func deleteProperty(stub *shim.ChaincodeStub, id string) error {
     object, err := getProperty(stub, id)
-    if checkErrors(&err){return err}
+    if checkErrors(err){return err}
     
     return object.delete(stub)
 }
@@ -263,7 +291,7 @@ func deleteProperty(stub *shim.ChaincodeStub, id string) error {
 func (object *Property) delete(stub *shim.ChaincodeStub) error {
     object.Status = PROPERTY_STATE_RECLAIMED
     err := object.save(stub)
-    if checkErrors(&err){return errors.New("Couldn't delete property for " + object.ID)}
+    if checkErrors(err){return errors.New("Couldn't delete property for " + object.ID)}
 
     return nil
 }
@@ -278,22 +306,22 @@ func (object *Property) validate() error {
 func getAccount(stub *shim.ChaincodeStub, id string) (Account, error) {
     var object Account
     bytes, err := stub.GetState(ACCOUNT_PREFIX + id)
-    if checkErrors(&err){return object, errors.New("Couldn't retrieve account for " + id)}
+    if checkErrors(err){return object, errors.New("Couldn't retrieve account for " + id)}
 
     object, err = unmarshalAccount(bytes)
-    if checkErrors(&err){return object, err}
+    if checkErrors(err){return object, err}
 
     return object, nil
 }
 
 func (object *Account) create(stub *shim.ChaincodeStub) error {
     err := object.validate()
-    if checkErrors(&err){return err}
+    if checkErrors(err){return err}
 
     if object.ID == "" {return errors.New("An account needs to be assigned to an owner")}
 
     existing, err := getAccount(stub, object.ID)
-    if checkErrors(&err){return err}
+    if checkErrors(err){return err}
     if existing.ID != "" {return errors.New("This account already exists")}
 
     return object.save(stub)
@@ -301,17 +329,17 @@ func (object *Account) create(stub *shim.ChaincodeStub) error {
 
 func (object *Account) save(stub *shim.ChaincodeStub) error {
     bytes, err := object.marshal()
-    if checkErrors(&err){return err}
+    if checkErrors(err){return err}
     
     err = stub.PutState(ACCOUNT_PREFIX + object.ID, bytes)
-    if checkErrors(&err){return errors.New("Couldn't save account for " + object.ID)}
+    if checkErrors(err){return errors.New("Couldn't save account for " + object.ID)}
 
     return nil
 }
 
 func deleteAccount(stub *shim.ChaincodeStub, id string) error {
     object, err := getAccount(stub, id)
-    if checkErrors(&err){return err}
+    if checkErrors(err){return err}
     
     return object.delete(stub)
 }
@@ -319,7 +347,7 @@ func deleteAccount(stub *shim.ChaincodeStub, id string) error {
 func (object *Account) delete(stub *shim.ChaincodeStub) error {
     object.Status = ACCOUNT_STATE_INACTIVE
     err := object.save(stub)
-    if checkErrors(&err){return errors.New("Couldn't delete account for " + object.ID)}
+    if checkErrors(err){return errors.New("Couldn't delete account for " + object.ID)}
 
     return nil
 }
@@ -336,13 +364,13 @@ func (object *Account) validate() error {
 func unmarshalProperty(bytes []byte) (Property, error) {
     var object Property
     err := json.Unmarshal(bytes, &object)
-    if checkErrors(&err){return object, errors.New("Error unmarshalling property")}
+    if checkErrors(err){return object, errors.New("Error unmarshalling property")}
     return object, nil
 }
 
 func (object *Property) marshal() ([]byte, error) {
-    bytes, err := json.Marshal(&object)
-    if checkErrors(&err){return nil, errors.New("Error marshalling property")}
+    bytes, err := json.Marshal(object)
+    if checkErrors(err){return nil, errors.New("Error marshalling property")}
     return bytes, nil
 }
 
@@ -352,13 +380,13 @@ func (object *Property) marshal() ([]byte, error) {
 func unmarshalAccount(bytes []byte) (Account, error) {
     var object Account
     err := json.Unmarshal(bytes, &object)
-    if checkErrors(&err){return object, errors.New("Error unmarshalling account")}
+    if checkErrors(err){return object, errors.New("Error unmarshalling account")}
     return object, nil
 }
 
 func (object *Account) marshal() ([]byte, error) {
-    bytes, err := json.Marshal(&object)
-    if checkErrors(&err){return nil, errors.New("Error marshalling account")}
+    bytes, err := json.Marshal(object)
+    if checkErrors(err){return nil, errors.New("Error marshalling account")}
     return bytes, nil
 }
 
@@ -406,7 +434,7 @@ func (l *Log) shouldLog(logLevel int) bool {
 //==============================================================================================================================
 //     checkErrors - Standard error checking code
 //==============================================================================================================================
-func checkErrors(err *error) bool {
+func checkErrors(err error) bool {
     return err != nil
 }
 
