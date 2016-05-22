@@ -31,12 +31,10 @@ const   PROPERTY_STATE_RECLAIMED     =  2
 const   ACCOUNT_STATE_ACTIVE       =  0
 const   ACCOUNT_STATE_INACTIVE     =  1
 
-const   LOG_DEBUG           =  0
-const   LOG_INFO            =  1
-const   LOG_WARN            =  2
-const   LOG_ERROR           =  3
-
-const   CURRENT_LOG_LEVEL   = LOG_DEBUG
+const   LOG_DEBUG           =  1
+const   LOG_INFO            =  2
+const   LOG_WARN            =  3
+const   LOG_ERROR           =  4
 
 const   PROPERTY_PREFIX     = "property:"
 const   ACCOUNT_PREFIX      = "account:"
@@ -56,7 +54,14 @@ type Chaincode struct {
 //==============================================================================================================================
 type Log struct {
 }
-var log Log
+
+//==============================================================================================================================
+//    Configuration - A struct to use for configuration. This should be passed in as JSON to the Init method with a function
+//                    of "configure"
+//==============================================================================================================================
+type Configuration struct {
+    logLevel        int         `json:"logLevel"`
+}
 
 //==============================================================================================================================
 //    Property - Defines the structure for a property object. JSON on right tells it what JSON fields to map to
@@ -68,9 +73,9 @@ type Property struct {
     AddressLine     string      `json:"addressLine"`
     Suburb          string      `json:"suburb"`
     State           string      `json:"state"`
+    PostCode        string      `json:"postcode"`
 
   //comparison
-    PostCode        string      `json:"postcode"`
     Bedrooms        int         `json:"bedrooms"`
     Bathrooms       int         `json:"bathrooms"`
     Squares         int         `json:"squares"`
@@ -121,6 +126,10 @@ type ECertResponse struct {
 //=================================================================================================================================
 //     Main - main - Starts up the chaincode
 //=================================================================================================================================
+
+var log    Log
+var config Configuration
+
 func main() {
     err := shim.Start(new(Chaincode))
     if checkErrors(err){fmt.Printf("Error starting Chaincode: %s", err)}
@@ -134,15 +143,32 @@ func (t *Chaincode) Init(stub *shim.ChaincodeStub, function string, args []strin
     //caller_ecert, caller_role, err := t.get_user_data(stub, args[0])
     //if checkErrors(err){return nil, err}
     
-    log.debug("Create an issuers account for Cardy and Co first up.")
-    var issuerAccount Account
-    issuerAccount.ID = "cardy"
-    issuerAccount.Cash = 100000
-    issuerAccount.Status = ACCOUNT_STATE_ACTIVE
-    err := issuerAccount.save(stub)
-    if checkErrors(err){fmt.Printf("Error starting Chaincode: %s", err)}
+    /*
+    var err error
+    
+    //make sure we have been configured up front
+    if config.logLevel == 0 && function != "configure" {
+        return nil, errors.New("Application hasn't been configured")
+    }
 
+    //set the log level
+    switch function {
+        case "configure":
+            configure(args)
+        default:
+            log.debug("Create an issuers account for Cardy and Co first up.")
+            var issuerAccount Account
+            issuerAccount.ID = "cardy"
+            issuerAccount.Cash = 100000
+            issuerAccount.Status = ACCOUNT_STATE_ACTIVE
+            err := issuerAccount.save(stub)
+            if checkErrors(err){fmt.Printf("Error starting Chaincode: %s", err)}
+    }
     return nil, err
+    */
+
+    config.logLevel = LOG_DEBUG
+    return nil, nil
 }
 
 //=================================================================================================================================    
@@ -180,11 +206,93 @@ func (t *Chaincode) Invoke(stub *shim.ChaincodeStub, function string, args []str
     //caller_ecert, caller_role, err := t.get_user_data(stub, args[0])
     //if checkErrors(err){return nil, err}
 
-    return nil, nil
+    switch function {
+        case "depositCash":
+            return nil, t.depositCash(stub, args)
+        case "withdrawCash":
+            return nil, t.withdrawCash(stub, args)
+        case "buyUnits":
+            return nil, t.buyUnits(stub, args)
+        case "sellUnits":
+            return nil, t.sellUnits(stub, args)
+        case "acceptOffer":
+            return nil, t.acceptOffer(stub, args)
+        case "createAccount":
+            return nil, t.createAccount(stub, args)
+        case "issueProperty":
+            return nil, t.issueProperty(stub, args)
+        default:
+            return nil, errors.New("Invalid function (" + function + ") called")
+    }
 }
 
 //==============================================================================================================================
 //     Business Logic Methods
+//==============================================================================================================================
+//     depositCash - Transfer cash into a blockchain account
+//==============================================================================================================================
+func (t *Chaincode) depositCash(stub *shim.ChaincodeStub, args []string) error {
+    if len(args) != 2 { return errors.New("Incorrect number of arguments passed") }
+
+    account, err := getAccount(stub, args[0])
+    if checkErrors(err){return err}
+
+    cashValue, err := strconv.ParseFloat(args[1], 64)
+    if checkErrors(err){return errors.New("Could not parse "+args[1]+" to float")}
+
+    account.Cash += cashValue
+    account.save(stub)
+    return err
+}
+
+//==============================================================================================================================
+//     withdrawCash - Transfer cash out of a blockchain account
+//==============================================================================================================================
+func (t *Chaincode) withdrawCash(stub *shim.ChaincodeStub, args []string) error {
+    if len(args) != 2 { return errors.New("Incorrect number of arguments passed") }
+
+    account, err := getAccount(stub, args[0])
+    if checkErrors(err){return err}
+
+    cashValue, err := strconv.ParseFloat(args[1], 64)
+    if checkErrors(err){return errors.New("Could not parse "+args[1]+" to float")}
+
+    if account.Cash < cashValue {
+        return errors.New("Not enough cash to withdraw")
+    }
+    account.Cash -= cashValue
+    account.save(stub)
+    return err
+}
+
+//==============================================================================================================================
+//     buyUnits - Purchase units of a property
+//==============================================================================================================================
+func (t *Chaincode) buyUnits(stub *shim.ChaincodeStub, args []string) error {
+    return nil
+}
+
+//==============================================================================================================================
+//     sellUnits - Sell units of a property
+//==============================================================================================================================
+func (t *Chaincode) sellUnits(stub *shim.ChaincodeStub, args []string) error {
+    return nil
+}
+
+//==============================================================================================================================
+//     acceptOffer - buy into a new property issue
+//==============================================================================================================================
+func (t *Chaincode) acceptOffer(stub *shim.ChaincodeStub, args []string) error {
+    return nil
+}
+
+//==============================================================================================================================
+//     createAccount - Create an account for a user
+//==============================================================================================================================
+func (t *Chaincode) createAccount(stub *shim.ChaincodeStub, args []string) error {
+    return nil
+}
+
 //==============================================================================================================================
 //     issueProperty - Issue a property for trading on the block chain. The property's units will automatically be assigned
 //                     to the account of the issuer
@@ -263,10 +371,8 @@ func (object *Property) create(stub *shim.ChaincodeStub) error {
     if checkErrors(err){return err}
 
     if object.ID != "" {return errors.New("Can't create property with ID already assigned")}
-
-    existing, err := getProperty(stub, object.ID)
-    if checkErrors(err){return err}
-    if existing.ID != "" {return errors.New("A property with this ID already exists")}
+    object.ID = getMd5Hash(object.AddressLine + object.Suburb + object.State + object.PostCode)
+    if object.exists(stub) {return errors.New("A property with this ID already exists")}
 
     return object.save(stub)
 }
@@ -296,6 +402,11 @@ func (object *Property) delete(stub *shim.ChaincodeStub) error {
     return nil
 }
 
+func (object *Property) exists(stub *shim.ChaincodeStub) bool {
+    bytes, err := stub.GetState(PROPERTY_PREFIX + object.ID)
+    return bytes != nil || err != nil
+}
+
 func (object *Property) validate() error {
     return nil
 }
@@ -319,10 +430,7 @@ func (object *Account) create(stub *shim.ChaincodeStub) error {
     if checkErrors(err){return err}
 
     if object.ID == "" {return errors.New("An account needs to be assigned to an owner")}
-
-    existing, err := getAccount(stub, object.ID)
-    if checkErrors(err){return err}
-    if existing.ID != "" {return errors.New("This account already exists")}
+    if object.exists(stub){return errors.New("This account already exists")}
 
     return object.save(stub)
 }
@@ -350,6 +458,11 @@ func (object *Account) delete(stub *shim.ChaincodeStub) error {
     if checkErrors(err){return errors.New("Couldn't delete account for " + object.ID)}
 
     return nil
+}
+
+func (object *Account) exists(stub *shim.ChaincodeStub) bool {
+    bytes, err := stub.GetState(ACCOUNT_PREFIX + object.ID)
+    return bytes != nil || err != nil
 }
 
 func (object *Account) validate() error {
@@ -393,9 +506,17 @@ func (object *Account) marshal() ([]byte, error) {
 //==============================================================================================================================
 //     Utility Subroutines
 //==============================================================================================================================
+//     Configure
+//==============================================================================================================================
+func configure(args []string) error {
+    err := json.Unmarshal([]byte(args[0]), &config)
+    if checkErrors(err){return errors.New("Error unmarshalling configuration")}
+    return nil
+}
+
+//==============================================================================================================================
 //     Logging
 //==============================================================================================================================
-
 func (l *Log) debug(text string) {
     l.log(LOG_DEBUG, text)
 }
@@ -428,7 +549,7 @@ func (l *Log) log(logLevel int, text string) {
 }
 
 func (l *Log) shouldLog(logLevel int) bool {
-    return logLevel >= CURRENT_LOG_LEVEL
+    return logLevel >= config.logLevel
 }
 
 //==============================================================================================================================
