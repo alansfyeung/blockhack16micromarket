@@ -38,34 +38,33 @@ const   LOG_ERROR           =  4
 
 const   PROPERTY_PREFIX     = "property:"
 const   ACCOUNT_PREFIX      = "account:"
+const   BUY_TRADES          = "buys"
+const   SELLS_TRADES        = "sells"
 
 
 //==============================================================================================================================
 //     Structure Definitions 
 //==============================================================================================================================
-//    Chaincode - A blank struct for use with Shim (A HyperLedger included go file used for get/put state
-//                and other HyperLedger functions)
+//    Chaincode
 //==============================================================================================================================
 type Chaincode struct {
 }
 
 //==============================================================================================================================
-//    Log - A blank struct to use as simple stateless logger
+//    Log
 //==============================================================================================================================
 type Log struct {
 }
 
 //==============================================================================================================================
-//    Configuration - A struct to use for configuration. This should be passed in as JSON to the Init method with a function
-//                    of "configure"
+//    Configuration
 //==============================================================================================================================
 type Configuration struct {
     logLevel        int         `json:"logLevel"`
 }
 
 //==============================================================================================================================
-//    Property - Defines the structure for a property object. JSON on right tells it what JSON fields to map to
-//              that element when reading a JSON object into the struct e.g. JSON propetyId -> Struct ID.
+//    Property
 //==============================================================================================================================
 type Property struct {
   //details
@@ -74,7 +73,14 @@ type Property struct {
     Suburb          string      `json:"suburb"`
     State           string      `json:"state"`
     PostCode        string      `json:"postcode"`
-
+    
+  //info
+    ManagedBy       string      `json:"managedBy"`
+    Issuer          string      `json:"issuer"`
+    Units           int         `json:"units"`
+    Status          int         `json:"status"`
+    
+/*
   //comparison
     Bedrooms        int         `json:"bedrooms"`
     Bathrooms       int         `json:"bathrooms"`
@@ -88,16 +94,11 @@ type Property struct {
     LastPayment     int         `json:"lastPaymentDate"`
     Valuation       int         `json:"valution"`
     ValuationDate   int         `json:"valuationDate"`
-    
-  //info
-    ManagedBy       string      `json:"managedBy"`
-    Issuer          string      `json:"issuer"`
-    Units           int         `json:"units"`
-    Status          int         `json:"status"`
+  */
 }
 
 //==============================================================================================================================
-//    Account - Defines the structure for a share in a property.
+//    Account
 //==============================================================================================================================
 type Account struct {
     ID              string      `json:"accountId"`
@@ -107,7 +108,7 @@ type Account struct {
 }
 
 //==============================================================================================================================
-//    Holding - Defines the structure for a share in a property.
+//    Holding
 //==============================================================================================================================
 type Holding struct {
     Entity          string      `json:"entity"`
@@ -115,7 +116,17 @@ type Holding struct {
 }
 
 //==============================================================================================================================
-//    ECertResponse - Struct for storing the JSON response of retrieving an ECert. JSON OK -> Struct OK
+//    Trade
+//==============================================================================================================================
+type Trade struct {
+    Entity          string      `json:"entity"`
+    Price           float64     `json:"price"`
+    Units           int         `json:"units"`
+    Value           float64     `json:"value"`
+}
+
+//==============================================================================================================================
+//    ECertResponse
 //==============================================================================================================================
 type ECertResponse struct {
     OK string `json:"OK"`
@@ -168,6 +179,14 @@ func (t *Chaincode) Init(stub *shim.ChaincodeStub, function string, args []strin
     */
 
     config.logLevel = LOG_DEBUG
+    t.createAccount(stub, []string{"cardy"})
+    t.depositCash(stub, []string{"cardy", "1000000"})
+    t.issueProperty(stub, []string{`{addressLine: "30 Oakwood St", suburb: "Sutherland", state: "NSW", postcode: "2232", issuer: "cardy", units: 10000, valuation: 10000000}`})
+
+    t.createAccount(stub, []string{"cripps"})
+    t.depositCash(stub, []string{"cripps", "200000"})
+    t.issueProperty(stub, []string{`{addressLine: "25a National Ave", suburb: "Loftus", state: "NSW", postcode: "2232", issuer: "cripps", units: 1400, valuation: 14000000}}`})
+
     return nil, nil
 }
 
@@ -180,21 +199,16 @@ func (t *Chaincode) Query(stub *shim.ChaincodeStub, function string, args []stri
     //caller_ecert, caller_role, err := t.get_user_data(stub, args[0])
     //if checkErrors(err){return nil, err}
 
-    A := args[0]
+    switch function {
+        case "getProperties":
+            return nil, nil //t.getProperties(stub, args)
+        default:
+            Avalbytes, err := stub.GetState(args[0])
+            if checkErrors(err){return nil, errors.New(`{Error: "Failed to get state for ` + args[0] + `"}`)}
+            if Avalbytes == nil {return nil, errors.New(`{Error: "Nil amount for ` + args[0] + `"}`)}
+            return Avalbytes, nil    
+    }
 
-	// Get the state from the ledger
-	Avalbytes, err := stub.GetState(A)
-	if err != nil {
-		jsonResp := "{\"Error\":\"Failed to get state for " + A + "\"}"
-		return nil, errors.New(jsonResp)
-	}
-
-    if Avalbytes == nil {
-		jsonResp := "{\"Error\":\"Nil amount for " + A + "\"}"
-		return nil, errors.New(jsonResp)
-	}
-
-	return Avalbytes, nil
 }
 
 //==============================================================================================================================
@@ -211,10 +225,10 @@ func (t *Chaincode) Invoke(stub *shim.ChaincodeStub, function string, args []str
             return nil, t.depositCash(stub, args)
         case "withdrawCash":
             return nil, t.withdrawCash(stub, args)
-        case "buyUnits":
-            return nil, t.buyUnits(stub, args)
-        case "sellUnits":
-            return nil, t.sellUnits(stub, args)
+        case "createBuyTrade":
+            return nil, t.createBuyTrade(stub, args)
+        case "createSellTrade":
+            return nil, t.createSellTrade(stub, args)
         case "acceptOffer":
             return nil, t.acceptOffer(stub, args)
         case "createAccount":
@@ -268,14 +282,14 @@ func (t *Chaincode) withdrawCash(stub *shim.ChaincodeStub, args []string) error 
 //==============================================================================================================================
 //     buyUnits - Purchase units of a property
 //==============================================================================================================================
-func (t *Chaincode) buyUnits(stub *shim.ChaincodeStub, args []string) error {
+func (t *Chaincode) createBuyTrade(stub *shim.ChaincodeStub, args []string) error {
     return nil
 }
 
 //==============================================================================================================================
 //     sellUnits - Sell units of a property
 //==============================================================================================================================
-func (t *Chaincode) sellUnits(stub *shim.ChaincodeStub, args []string) error {
+func (t *Chaincode) createSellTrade(stub *shim.ChaincodeStub, args []string) error {
     return nil
 }
 
@@ -290,7 +304,12 @@ func (t *Chaincode) acceptOffer(stub *shim.ChaincodeStub, args []string) error {
 //     createAccount - Create an account for a user
 //==============================================================================================================================
 func (t *Chaincode) createAccount(stub *shim.ChaincodeStub, args []string) error {
-    return nil
+    if len(args) != 1 {return errors.New("Incorrect number of arguments passed")}
+    var account Account
+    account.ID = args[0]
+    account.Status = ACCOUNT_STATE_ACTIVE
+    if account.exists(stub) {return errors.New("account already exists")}
+    return account.create(stub)
 }
 
 //==============================================================================================================================
