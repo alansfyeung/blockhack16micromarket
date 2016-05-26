@@ -53,7 +53,7 @@ const   PRPTY_TRADES_PREFIX = "prptytrades:"
 //==============================================================================================================================
 //    Chaincode
 //==============================================================================================================================
-type Chaincode struct {
+type SimpleChaincode struct {
 }
 
 //==============================================================================================================================
@@ -177,7 +177,7 @@ type ECertResponse struct {
 }
 
 //==============================================================================================================================
-//     Chaincode Lifecycle Functions
+//     SimpleChaincode Lifecycle Functions
 //=================================================================================================================================
 //     Main - main - Starts up the chaincode
 //=================================================================================================================================
@@ -186,14 +186,14 @@ var log    Log
 var config Configuration
 
 func main() {
-    err := shim.Start(new(Chaincode))
+    err := shim.Start(new(SimpleChaincode))
     if checkErrors(err){fmt.Printf("Error starting Chaincode: %s", err)}
 }
 
 //==============================================================================================================================
 //    Init Function - Called when the user deploys the chaincode                                                                    
 //==============================================================================================================================
-func (t *Chaincode) Init(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
+func (t *SimpleChaincode) Init(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
     //authenticate the user
     //caller_ecert, caller_role, err := t.get_user_data(stub, args[0])
     //if checkErrors(err){return nil, err}
@@ -249,7 +249,7 @@ func (t *Chaincode) Init(stub *shim.ChaincodeStub, function string, args []strin
 //    Query - Called on chaincode query. Takes a function name passed and calls that function. Passes the
 //          initial arguments passed are passed on to the called function.
 //=================================================================================================================================    
-func (t *Chaincode) Query(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
+func (t *SimpleChaincode) Query(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
     //authenticate the user
     //caller_ecert, caller_role, err := t.get_user_data(stub, args[0])
     //if checkErrors(err){return nil, err}
@@ -287,7 +287,7 @@ func (t *Chaincode) Query(stub *shim.ChaincodeStub, function string, args []stri
 //    Invoke - Called on chaincode invoke. Takes a function name passed and calls that function. Converts some
 //             initial arguments passed to other things for use in the called function e.g. name -> ecert
 //==============================================================================================================================
-func (t *Chaincode) Run(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
+func (t *SimpleChaincode) Invoke(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
     //authenticate the user
     //caller_ecert, caller_role, err := t.get_user_data(stub, args[0])
     //if checkErrors(err){return nil, err}
@@ -335,7 +335,7 @@ func (t *Chaincode) Run(stub *shim.ChaincodeStub, function string, args []string
 //==============================================================================================================================
 //     login
 //==============================================================================================================================
-func (t *Chaincode) login(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+func (t *SimpleChaincode) login(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
 //login(accountID string)
     //currently just return the account
     return t.getAccount(stub, args)
@@ -344,7 +344,7 @@ func (t *Chaincode) login(stub *shim.ChaincodeStub, args []string) ([]byte, erro
 //==============================================================================================================================
 //     getAccount
 //==============================================================================================================================
-func (t *Chaincode) getAccount(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+func (t *SimpleChaincode ) getAccount(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
     //getAccount(accountID string)
     if len(args) != 1 {return nil, errors.New("Incorrect number of arguments passed")}
     accountID := args[0]
@@ -359,7 +359,7 @@ func (t *Chaincode) getAccount(stub *shim.ChaincodeStub, args []string) ([]byte,
 //==============================================================================================================================
 //     getProperties
 //==============================================================================================================================
-func (t *Chaincode) getProperties(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+func (t *SimpleChaincode) getProperties(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
     //getProperties(propertyIDs []string)
     var propertyIDs = args
 
@@ -377,7 +377,7 @@ func (t *Chaincode) getProperties(stub *shim.ChaincodeStub, args []string) ([]by
 //==============================================================================================================================
 //     getOpenTradesByAccount
 //==============================================================================================================================
-func (t *Chaincode) getOpenTradesByAccount(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+func (t *SimpleChaincode ) getOpenTradesByAccount(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
     //getOpenTradesByAccount(accountID string)
     if len(args) != 1 {return nil, errors.New("Incorrect number of arguments passed")}
     accountID := args[0]
@@ -394,7 +394,7 @@ func (t *Chaincode) getOpenTradesByAccount(stub *shim.ChaincodeStub, args []stri
 //==============================================================================================================================
 //     getAvailableTrades
 //==============================================================================================================================
-func (t *Chaincode) getAvailableTrades(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+func (t *SimpleChaincode ) getAvailableTrades(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
     //getAvailableTrades()
     if len(args) != 0 {return nil, errors.New("Incorrect number of arguments passed")}
     
@@ -432,7 +432,7 @@ func (t *Chaincode) getAvailableTrades(stub *shim.ChaincodeStub, args []string) 
 //==============================================================================================================================
 //     depositCash - Transfer cash into a blockchain account
 //==============================================================================================================================
-func (t *Chaincode) depositCash(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+func (t *SimpleChaincode ) depositCash(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
     //depositCash(accountID, value)
     if len(args) != 2 {return nil, errors.New("Incorrect number of arguments passed")}
 
@@ -450,7 +450,7 @@ func (t *Chaincode) depositCash(stub *shim.ChaincodeStub, args []string) ([]byte
 //==============================================================================================================================
 //     withdrawCash - Transfer cash out of a blockchain account
 //==============================================================================================================================
-func (t *Chaincode) withdrawCash(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+func (t *SimpleChaincode ) withdrawCash(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
     //withdrawCash(accountID, value)
     if len(args) != 2 {return nil, errors.New("Incorrect number of arguments passed")}
 
@@ -471,7 +471,7 @@ func (t *Chaincode) withdrawCash(stub *shim.ChaincodeStub, args []string) ([]byt
 //==============================================================================================================================
 //     createTrade - Purchase units of a property
 //==============================================================================================================================
-func (t *Chaincode) createTrade(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+func (t *SimpleChaincode ) createTrade(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
     //createTrade(trade string) {accountID: "m123456", direction: "S", propertyID: "qwer1234", price: "100.00", units: "10"}
     if len(args) != 1 {return nil, errors.New("Incorrect number of arguments passed")}
 
@@ -481,7 +481,7 @@ func (t *Chaincode) createTrade(stub *shim.ChaincodeStub, args []string) ([]byte
 //==============================================================================================================================
 //     createAccount - Create an account for a user
 //==============================================================================================================================
-func (t *Chaincode) createAccount(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+func (t *SimpleChaincode ) createAccount(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
 
     if len(args) != 1 {return nil, errors.New("Incorrect number of arguments passed")}
     accountID := args[0]
@@ -497,7 +497,7 @@ func (t *Chaincode) createAccount(stub *shim.ChaincodeStub, args []string) ([]by
 //==============================================================================================================================
 //     generateOffer - buy into a new property issue
 //==============================================================================================================================
-func (t *Chaincode) generateOffer(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+func (t *SimpleChaincode ) generateOffer(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
     //generateOffer(propertyID string, units int)
     if len(args) != 2 {return nil, errors.New("Incorrect number of arguments passed")}
     //propertyID := args[0]
@@ -510,7 +510,7 @@ func (t *Chaincode) generateOffer(stub *shim.ChaincodeStub, args []string) ([]by
 //==============================================================================================================================
 //     acceptOffer - buy into a new property issue
 //==============================================================================================================================
-func (t *Chaincode) acceptOffer(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+func (t *SimpleChaincode ) acceptOffer(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
     //acceptOffer(offerID string, accountID string)
     if len(args) != 2 {return nil, errors.New("Incorrect number of arguments passed")}
     //offerID := args[0]
@@ -523,7 +523,7 @@ func (t *Chaincode) acceptOffer(stub *shim.ChaincodeStub, args []string) ([]byte
 //     issueProperty - Issue a property for trading on the block chain. The property's units will automatically be assigned
 //                     to the account of the issuer
 //==============================================================================================================================
-func (t *Chaincode) issueProperty(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+func (t *SimpleChaincode ) issueProperty(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
 
     log.debug("check issueProperty args")
     if len(args) != 1 {return nil, errors.New("Incorrect number of arguments. Expecting property json")}
@@ -949,7 +949,7 @@ func getMd5Hash(text string) string {
 //     get_user_data - Calls the get_ecert and check_role functions and returns the ecert and role for the
 //                     name passed.
 //==============================================================================================================================
-func (t *Chaincode) get_user_data(stub *shim.ChaincodeStub, name string) ([]byte, int64, error){
+func (t *SimpleChaincode ) get_user_data(stub *shim.ChaincodeStub, name string) ([]byte, int64, error){
     //get the ecert
     ecert, err := t.get_ecert(stub, name);
     if err != nil {
@@ -969,7 +969,7 @@ func (t *Chaincode) get_user_data(stub *shim.ChaincodeStub, name string) ([]byte
 //     check_role - Takes an ecert, decodes it to remove html encoding then parses it and checks the
 //                   certificates extensions containing the role before returning the role interger. Returns -1 if it errors
 //==============================================================================================================================
-func (t *Chaincode) check_role(stub *shim.ChaincodeStub, args []string) (int64, error) {                                                                                            
+func (t *SimpleChaincode ) check_role(stub *shim.ChaincodeStub, args []string) (int64, error) {                                                                                            
     ECertSubjectRole := asn1.ObjectIdentifier{2, 1, 3, 4, 5, 6, 7}                                                                                                                        
 
     //make % etc normal
@@ -1004,7 +1004,7 @@ func (t *Chaincode) check_role(stub *shim.ChaincodeStub, args []string) (int64, 
 //     get_user - Takes an ecert, decodes it to remove html encoding then parses it and gets the
 //                 common name and returns it
 //==============================================================================================================================
-func (t *Chaincode) get_user(stub *shim.ChaincodeStub, encodedCert string) (string, error) {
+func (t *SimpleChaincode ) get_user(stub *shim.ChaincodeStub, encodedCert string) (string, error) {
     //make % etc normal 
     decodedCert, err := url.QueryUnescape(encodedCert);
     if err != nil {
@@ -1026,7 +1026,7 @@ func (t *Chaincode) get_user(stub *shim.ChaincodeStub, encodedCert string) (stri
 //     get_ecert - Takes the name passed and calls out to the REST API for HyperLedger to retrieve the ecert
 //                 for that user. Returns the ecert as retrived including html encoding.
 //==============================================================================================================================
-func (t *Chaincode) get_ecert(stub *shim.ChaincodeStub, name string) ([]byte, error) {    
+func (t *SimpleChaincode ) get_ecert(stub *shim.ChaincodeStub, name string) ([]byte, error) {    
     var cert ECertResponse
 
     //call out to the hyperLedger rest api to get the ecert of the user with that name
@@ -1057,7 +1057,7 @@ func (t *Chaincode) get_ecert(stub *shim.ChaincodeStub, name string) ([]byte, er
 //     Unit Tests
 //==============================================================================================================================
 
-func (t *Chaincode) testAccountCreateSuccess(stub *shim.ChaincodeStub, accountID string) []string {
+func (t *SimpleChaincode ) testAccountCreateSuccess(stub *shim.ChaincodeStub, accountID string) []string {
     var responses []string
 
     var account Account
