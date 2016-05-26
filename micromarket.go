@@ -37,6 +37,9 @@ const   LOG_INFO            =  2
 const   LOG_WARN            =  3
 const   LOG_ERROR           =  4
 
+const   TRADE_BUY           =  "B"
+const   TRADE_SELL          =  "S"
+
 const   PROPERTY_PREFIX     = "property:"
 const   ACCOUNT_PREFIX      = "account:"
 const   TRDING_PRPTY_PREFIX = "trdprpty:"
@@ -368,11 +371,30 @@ func (t *Chaincode) getAvailableTrades(stub *shim.ChaincodeStub, args []string) 
     propertyIDs, err := getTradingProperties(stub)
     if checkErrors(err){return nil, err}
 
+    var returnTrades []ReturnTrade
+
     for i:=0;i<len(propertyIDs);i++ {
+        //for this property create a return trade
+        var returnTrade ReturnTrade
+        returnTrade.PropertyID = propertyIDs[i]
+
+        var value float64
+        trades, err := getPropertyTrades(stub, propertyIDs[i])
+        if checkErrors(err){return nil, err}
+
+        for j:=0;j<len(trades);j++ {
+            returnTrade.Units += trades[j].Units
+            tradeValue := float64(trades[j].Units) * trades[j].Price
+            value += tradeValue
+        }
+        if returnTrade.Units == 0 {continue}
         
+        returnTrade.Direction = trades[0].Direction
+        returnTrade.Price = value / float64(returnTrade.Units)
+        returnTrades = append(returnTrades, returnTrade)
     }
 
-    return nil, nil
+    return marshalReturnTrades(returnTrades)
 }
 
 //==============================================================================================================================
@@ -807,6 +829,12 @@ func unmarshalTradingProperties(bytes []byte) (TradingProperties, error) {
 func marshalTrades(objects []Trade) ([]byte, error) {
     bytes, err := json.Marshal(objects)
     if checkErrors(err){return nil, errors.New("Error marshalling trade array")}
+    return bytes, nil
+}
+
+func marshalReturnTrades(objects []ReturnTrade) ([]byte, error) {
+    bytes, err := json.Marshal(objects)
+    if checkErrors(err){return nil, errors.New("Error marshalling return trade array")}
     return bytes, nil
 }
 
