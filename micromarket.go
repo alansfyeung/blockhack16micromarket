@@ -119,18 +119,9 @@ type Holding struct {
 }
 
 //==============================================================================================================================
-//    AccountTrades
+//    TradeMap
 //==============================================================================================================================
-type AccountTrades struct {
-    AccountID   string            `json:"accountID"`
-    Trades      map[string]Trade  `json:"trades"`
-}
-
-//==============================================================================================================================
-//    PropertyTrades
-//==============================================================================================================================
-type PropertyTrades struct {
-    PropertyID  string            `json:"accountID"`
+type TradeMap struct {
     Trades      map[string]Trade  `json:"trades"`
 }
 
@@ -358,9 +349,15 @@ func (t *Chaincode) getProperties(stub *shim.ChaincodeStub, args []string) ([]by
 func (t *Chaincode) getOpenTradesByAccount(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
     //getOpenTradesByAccount(accountID string)
     if len(args) != 1 {return nil, errors.New("Incorrect number of arguments passed")}
-    //accountID := args[0]
+    accountID := args[0]
 
-    return nil, nil
+    var account Account
+    account.ID = accountID
+
+    trades, err := account.getTrades(stub)
+    if checkErrors(err) {return nil, err}
+
+    return marshalTrades(trades)
 }
 
 //==============================================================================================================================
@@ -629,6 +626,31 @@ func getAccount(stub *shim.ChaincodeStub, id string) (Account, error) {
     return object, nil
 }
 
+func (object *Account) getTrades(stub *shim.ChaincodeStub) ([]Trade, error) {
+    var trades []Trade
+    var tradeMap map[string]Trade
+    if object.ID == "" {return trades, errors.New("Need an account ID to search on")}
+
+    bytes, err := stub.GetState(ACCT_TRADES_PREFIX + object.ID)
+    if checkErrors(err){return trades, errors.New("Couldn't retrieve trades for " + object.ID)}
+    if bytes != nil && len(bytes) > 0 {
+        bytes, err := stub.GetState(ACCT_TRADES_PREFIX + object.ID)
+        if checkErrors(err){return trades, errors.New("Couldn't retrieve account trades for " + object.ID)}
+
+        accountTrades, err := unmarshalTradeMap(bytes)
+        if checkErrors(err){return trades, err}
+        tradeMap = accountTrades.Trades
+    } else {
+        tradeMap = map[string]Trade{}
+    }
+
+    for _, value := range tradeMap {
+        trades = append(trades, value)
+    }
+
+    return trades, nil
+}
+
 func (object *Account) create(stub *shim.ChaincodeStub) error {
     err := object.validate()
     if checkErrors(err){return err}
@@ -726,12 +748,12 @@ func (object *Account) marshal() ([]byte, error) {
 }
 
 //==============================================================================================================================
-//     Trade
+//     TradeMap
 //==============================================================================================================================
-func unmarshalTrade(bytes []byte) (Trade, error) {
-    var object Trade
+func unmarshalTradeMap(bytes []byte) (TradeMap, error) {
+    var object TradeMap
     err := json.Unmarshal(bytes, &object)
-    if checkErrors(err){return object, errors.New("Error unmarshalling trade")}
+    if checkErrors(err){return object, errors.New("Error unmarshalling trade map")}
     return object, nil
 }
 
@@ -741,9 +763,9 @@ func marshalTrades(objects []Trade) ([]byte, error) {
     return bytes, nil
 }
 
-func (object *Trade) marshal() ([]byte, error) {
+func (object *TradeMap) marshal() ([]byte, error) {
     bytes, err := json.Marshal(object)
-    if checkErrors(err){return nil, errors.New("Error marshalling trade")}
+    if checkErrors(err){return nil, errors.New("Error marshalling trade map")}
     return bytes, nil
 }
 
