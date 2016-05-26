@@ -254,19 +254,32 @@ func (t *Chaincode) Query(stub *shim.ChaincodeStub, function string, args []stri
     //caller_ecert, caller_role, err := t.get_user_data(stub, args[0])
     //if checkErrors(err){return nil, err}
 
-    switch function {
-        case "login":
-            return t.login(stub, args)
-        case "getAccount":
-            return t.getAccount(stub, args)
-        case "getProperties":
-            return t.getProperties(stub, args)
-        case "getOpenTradesByAccount":
-            return t.getOpenTradesByAccount(stub, args)
-        case "getAvailableTrades":
-            return t.getAvailableTrades(stub, args)
-        default:
-            return nil, errors.New("Invalid function (" + function + ") called")
+    // switch function {
+    //     case "login":
+    //         return t.login(stub, args)
+    //     case "getAccount":
+    //         return t.getAccount(stub, args)
+    //     case "getProperties":
+    //         return t.getProperties(stub, args)
+    //     case "getOpenTradesByAccount":
+    //         return t.getOpenTradesByAccount(stub, args)
+    //     case "getAvailableTrades":
+    //         return t.getAvailableTrades(stub, args)
+    //     default:
+    //         return nil, errors.New("Invalid function (" + function + ") called")
+    // }
+    if function == "login" {
+        return t.login(stub, args)
+    } else if function == "getAccount" {
+        return t.getAccount(stub, args)
+    } else if function == "getProperties" {
+        return t.getProperties(stub, args)        
+    } else if function == "getOpenTradesByAccount" {
+        return t.getOpenTradesByAccount(stub, args)
+    } else if function == "getAvailableTrades" {
+        return t.getAvailableTrades(stub, args)
+    } else {
+        return nil, errors.New("Invalid function (" + function + ") called")
     }
 }
 
@@ -279,23 +292,40 @@ func (t *Chaincode) Invoke(stub *shim.ChaincodeStub, function string, args []str
     //caller_ecert, caller_role, err := t.get_user_data(stub, args[0])
     //if checkErrors(err){return nil, err}
 
-    switch function {
-        case "depositCash":
-            return t.depositCash(stub, args)
-        case "withdrawCash":
-            return t.withdrawCash(stub, args)
-        case "createTrade":
-            return t.createTrade(stub, args)
-        case "createAccount":
-            return t.createAccount(stub, args)
-        case "issueProperty":
-            return t.issueProperty(stub, args)
-        case "generateOffer":
-            return t.generateOffer(stub, args)
-        case "acceptOffer":
-            return t.acceptOffer(stub, args)
-        default:
-            return nil, errors.New("Invalid function (" + function + ") called")
+    // switch function {
+    //     case "depositCash":
+    //         return t.depositCash(stub, args)
+    //     case "withdrawCash":
+    //         return t.withdrawCash(stub, args)
+    //     case "createTrade":
+    //         return t.createTrade(stub, args)
+    //     case "createAccount":
+    //         return t.createAccount(stub, args)
+    //     case "issueProperty":
+    //         return t.issueProperty(stub, args)
+    //     case "generateOffer":
+    //         return t.generateOffer(stub, args)
+    //     case "acceptOffer":
+    //         return t.acceptOffer(stub, args)
+    //     default:
+    //         return nil, errors.New("Invalid function (" + function + ") called")
+    // }
+    if function == "depositCash" {
+        return t.depositCash(stub, args)        
+    } else if function == "withdrawCash" {
+        return t.withdrawCash(stub, args)
+    } else if function == "createTrade" {
+        return t.createTrade(stub, args)    
+    } else if function == "createAccount" {
+        return t.createAccount(stub, args)        
+    } else if function == "issueProperty" {
+        return t.issueProperty(stub, args)
+    } else if function == "generateOffer" {
+        return t.generateOffer(stub, args) 
+    } else if function == case "acceptOffer" {
+        return t.acceptOffer(stub, args)
+    } else {
+        return nil, errors.New("Invalid function (" + function + ") called")     
     }
 
 }
