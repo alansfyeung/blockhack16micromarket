@@ -3,6 +3,7 @@ package main
 import (
     "errors"
     "fmt"
+    "sort"
     "strconv"
     "crypto/md5"
     "encoding/hex"
@@ -38,8 +39,10 @@ const   LOG_ERROR           =  4
 
 const   PROPERTY_PREFIX     = "property:"
 const   ACCOUNT_PREFIX      = "account:"
-const   BUY_TRADES          = "buys"
-const   SELLS_TRADES        = "sells"
+const   TRADE_PREFIX        = "trade:"
+const   OFFER_PREFIX        = "offer:"
+const   ACCT_TRADES_PREFIX  = "accttrades:"
+const   PRPTY_TRADES_PREFIX = "prptytrades:"
 
 
 //==============================================================================================================================
@@ -68,7 +71,7 @@ type Configuration struct {
 //==============================================================================================================================
 type Property struct {
   //details
-    ID              string      `json:"propertyId"`
+    ID              string      `json:"propertyID"`
     AddressLine     string      `json:"addressLine"`
     Suburb          string      `json:"suburb"`
     State           string      `json:"state"`
@@ -82,18 +85,18 @@ type Property struct {
     
 /*
   //comparison
-    Bedrooms        int         `json:"bedrooms"`
-    Bathrooms       int         `json:"bathrooms"`
-    Squares         int         `json:"squares"`
-    Size            int         `json:"size"`
-    Zoning          int         `json:"zoning"`
+    Bedrooms        int         `json:"bedrooms,omitempty"`
+    Bathrooms       int         `json:"bathrooms,omitempty"`
+    Squares         int         `json:"squares,omitempty"`
+    Size            int         `json:"size,omitempty"`
+    Zoning          int         `json:"zoning,omitempty"`
 
   //financials
-    Rented          bool        `json:"rented"`
-    Rent            int         `json:"rent"`
-    LastPayment     int         `json:"lastPaymentDate"`
-    Valuation       int         `json:"valution"`
-    ValuationDate   int         `json:"valuationDate"`
+    Rented          bool        `json:"rented,omitempty"`
+    Rent            int         `json:"rent,omitempty"`
+    LastPayment     int         `json:"lastPaymentDate,omitempty"`
+    Valuation       int         `json:"valution,omitempty"`
+    ValuationDate   int         `json:"valuationDate,omitempty"`
   */
 }
 
@@ -101,7 +104,7 @@ type Property struct {
 //    Account
 //==============================================================================================================================
 type Account struct {
-    ID              string      `json:"accountId"`
+    ID              string      `json:"accountID"`
     Cash            float64     `json:"cash"`
     Status          int         `json:"status"`
     Holdings        []Holding   `json:"holdings"`
@@ -116,13 +119,60 @@ type Holding struct {
 }
 
 //==============================================================================================================================
+//    AccountTrades
+//==============================================================================================================================
+type AccountTrades struct {
+    AccountID   string            `json:"accountID"`
+    Trades      map[string]Trade  `json:"trades"`
+}
+
+//==============================================================================================================================
+//    PropertyTrades
+//==============================================================================================================================
+type PropertyTrades struct {
+    PropertyID  string            `json:"accountID"`
+    Trades      map[string]Trade  `json:"trades"`
+}
+
+//==============================================================================================================================
 //    Trade
 //==============================================================================================================================
 type Trade struct {
-    Entity          string      `json:"entity"`
+    ID              string      `json:"tradeID"`
+    AccountID       string      `json:"accountID"`
+    PropertyID      string      `json:"propertyID"`
+    Direction       string      `json:"direction"`
     Price           float64     `json:"price"`
     Units           int         `json:"units"`
-    Value           float64     `json:"value"`
+    Escrow          float64     `json:"escrow"`
+}
+
+//==============================================================================================================================
+//    ReturnTrade
+//==============================================================================================================================
+type ReturnTrade struct {
+    PropertyID      string      `json:"propertyID"`
+    Direction       string      `json:"direction"`
+    Price           float64     `json:"price"`
+    Units           int         `json:"units"`
+}
+
+//==============================================================================================================================
+//    TradedProperties
+//==============================================================================================================================
+type TradedProperties struct {
+    PropertyIDs  map[string]string  `json:"propertyIDs"`
+}
+
+//==============================================================================================================================
+//    Offer
+//==============================================================================================================================
+type Offer struct {
+    ID              string      `json:"offerID"`
+    PropertyID      string      `json:"propertyID"`
+    Direction       string      `json:"direction"`
+    Price           float64     `json:"price"`
+    Units           int         `json:"units"`
 }
 
 //==============================================================================================================================
@@ -154,41 +204,52 @@ func (t *Chaincode) Init(stub *shim.ChaincodeStub, function string, args []strin
     //caller_ecert, caller_role, err := t.get_user_data(stub, args[0])
     //if checkErrors(err){return nil, err}
     
-    /*
     var err error
-    
+   /* 
     //make sure we have been configured up front
     if config.logLevel == 0 && function != "configure" {
         return nil, errors.New("Application hasn't been configured")
     }
+    */
 
     //set the log level
     switch function {
         case "configure":
             configure(args)
+        case "test":
+            log.debug("*************************************")
+            log.debug(" Running Tests")
+            log.debug("*************************************")
+            var output []string
+            output = append(output, t.testAccountCreateSuccess(stub, "testaccount")...)
+
+            sort.Strings(output)
+            for i := 0; i<len(output); i++ {log.debug(output[i])}
+
+        case "demo":
+            config.logLevel = LOG_DEBUG
+
+            //create the cardy account
+            t.createAccount(stub, []string{"cardy"})
+            t.depositCash(stub, []string{"cardy", "1000000"})
+            t.issueProperty(stub, []string{`{addressLine: "30 Oakwood St", suburb: "Sutherland", state: "NSW", postcode: "2232", issuer: "cardy", units: 10000, valuation: 10000000}`})
+
+            t.createAccount(stub, []string{"cripps"})
+            t.depositCash(stub, []string{"cripps", "200000"})
+            t.issueProperty(stub, []string{`{addressLine: "25a National Ave", suburb: "Loftus", state: "NSW", postcode: "2232", issuer: "cripps", units: 1400, valuation: 14000000}}`})
+            t.issueProperty(stub, []string{`{addressLine: "43a Belmont St", suburb: "Sutherland", state: "NSW", postcode: "2232", issuer: "cripps", units: 800, valuation: 12000000}}`})
+
+            
+            t.createAccount(stub, []string{"m123456"})
+            t.depositCash(stub, []string{"m123456", "200000"})
+
         default:
-            log.debug("Create an issuers account for Cardy and Co first up.")
-            var issuerAccount Account
-            issuerAccount.ID = "cardy"
-            issuerAccount.Cash = 100000
-            issuerAccount.Status = ACCOUNT_STATE_ACTIVE
-            err := issuerAccount.save(stub)
-            if checkErrors(err){fmt.Printf("Error starting Chaincode: %s", err)}
+            err = errors.New("You must choose an initialisation mode")
     }
-    return nil, err
-    */
-
     config.logLevel = LOG_DEBUG
-    t.createAccount(stub, []string{"cardy"})
-    t.depositCash(stub, []string{"cardy", "1000000"})
-    t.issueProperty(stub, []string{`{addressLine: "30 Oakwood St", suburb: "Sutherland", state: "NSW", postcode: "2232", issuer: "cardy", units: 10000, valuation: 10000000}`})
 
-    t.createAccount(stub, []string{"cripps"})
-    t.depositCash(stub, []string{"cripps", "200000"})
-    t.issueProperty(stub, []string{`{addressLine: "25a National Ave", suburb: "Loftus", state: "NSW", postcode: "2232", issuer: "cripps", units: 1400, valuation: 14000000}}`})
-
-    return nil, nil
-}
+    return nil, err
+ }
 
 //=================================================================================================================================    
 //    Query - Called on chaincode query. Takes a function name passed and calls that function. Passes the
@@ -200,15 +261,21 @@ func (t *Chaincode) Query(stub *shim.ChaincodeStub, function string, args []stri
     //if checkErrors(err){return nil, err}
 
     switch function {
+        case "login":
+            return t.login(stub, args)
+        case "getAccount":
+            return t.getAccount(stub, args)
         case "getProperties":
-            return nil, nil //t.getProperties(stub, args)
+            return t.getProperties(stub, args)
+        case "getOpenTradesByAccount":
+            return t.getOpenTradesByAccount(stub, args)
+        case "getAvailableTrades":
+            return t.getAvailableTrades(stub, args)
+        case "getAllAvailableTrades":
+            return t.getAllAvailableTrades(stub, args)
         default:
-            Avalbytes, err := stub.GetState(args[0])
-            if checkErrors(err){return nil, errors.New(`{Error: "Failed to get state for ` + args[0] + `"}`)}
-            if Avalbytes == nil {return nil, errors.New(`{Error: "Nil amount for ` + args[0] + `"}`)}
-            return Avalbytes, nil    
+            return nil, errors.New("Invalid function (" + function + ") called")
     }
-
 }
 
 //==============================================================================================================================
@@ -222,101 +289,198 @@ func (t *Chaincode) Invoke(stub *shim.ChaincodeStub, function string, args []str
 
     switch function {
         case "depositCash":
-            return nil, t.depositCash(stub, args)
+            return t.depositCash(stub, args)
         case "withdrawCash":
-            return nil, t.withdrawCash(stub, args)
-        case "createBuyTrade":
-            return nil, t.createBuyTrade(stub, args)
-        case "createSellTrade":
-            return nil, t.createSellTrade(stub, args)
-        case "acceptOffer":
-            return nil, t.acceptOffer(stub, args)
+            return t.withdrawCash(stub, args)
+        case "createTrade":
+            return t.createTrade(stub, args)
         case "createAccount":
-            return nil, t.createAccount(stub, args)
+            return t.createAccount(stub, args)
         case "issueProperty":
-            return nil, t.issueProperty(stub, args)
+            return t.issueProperty(stub, args)
+        case "generateOffer":
+            return t.generateOffer(stub, args)
+        case "acceptOffer":
+            return t.acceptOffer(stub, args)
         default:
             return nil, errors.New("Invalid function (" + function + ") called")
     }
+
 }
 
 //==============================================================================================================================
-//     Business Logic Methods
+//     Query Logic Methods
+//==============================================================================================================================
+//     login
+//==============================================================================================================================
+func (t *Chaincode) login(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+//login(accountID string)
+    //currently just return the account
+    return t.getAccount(stub, args)
+}
+
+//==============================================================================================================================
+//     getAccount
+//==============================================================================================================================
+func (t *Chaincode) getAccount(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+    //getAccount(accountID string)
+    if len(args) != 1 {return nil, errors.New("Incorrect number of arguments passed")}
+    accountID := args[0]
+
+    account, err := getAccount(stub, accountID)
+    if checkErrors(err) {return nil, err}
+    
+    return account.marshal()
+
+}
+
+//==============================================================================================================================
+//     getProperties
+//==============================================================================================================================
+func (t *Chaincode) getProperties(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+    //getProperties(propertyIDs []string)
+    var propertyIDs = args
+
+    var properties []Property
+
+    for i:=0;i<len(propertyIDs);i++ {
+        property, err := getProperty(stub, propertyIDs[i])
+        if checkErrors(err) {return nil, err}
+        properties = append(properties, property)
+    }
+
+    return marshalProperties(properties)
+}
+
+//==============================================================================================================================
+//     getOpenTradesByAccount
+//==============================================================================================================================
+func (t *Chaincode) getOpenTradesByAccount(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+    //getOpenTradesByAccount(accountID string)
+    if len(args) != 1 {return nil, errors.New("Incorrect number of arguments passed")}
+    //accountID := args[0]
+
+    return nil, nil
+}
+
+//==============================================================================================================================
+//     getAvailableTrades
+//==============================================================================================================================
+func (t *Chaincode) getAvailableTrades(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+    //getAvailableTrades(direction string) {"B"/"S"}
+    if len(args) != 1 {return nil, errors.New("Incorrect number of arguments passed")}
+    //direction := args[0]
+
+    return nil, nil
+}
+
+//==============================================================================================================================
+//     getAllAvailableTrades
+//==============================================================================================================================
+func (t *Chaincode) getAllAvailableTrades(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+    //getAllAvailableTrades()
+    if len(args) != 0 {return nil, errors.New("Incorrect number of arguments passed")}
+
+    return nil, nil
+}
+
+//==============================================================================================================================
+//     Invoke Logic Methods
 //==============================================================================================================================
 //     depositCash - Transfer cash into a blockchain account
 //==============================================================================================================================
-func (t *Chaincode) depositCash(stub *shim.ChaincodeStub, args []string) error {
-    if len(args) != 2 { return errors.New("Incorrect number of arguments passed") }
+func (t *Chaincode) depositCash(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+    //depositCash(accountID, value)
+    if len(args) != 2 {return nil, errors.New("Incorrect number of arguments passed")}
 
     account, err := getAccount(stub, args[0])
-    if checkErrors(err){return err}
+    if checkErrors(err){return nil, err}
 
     cashValue, err := strconv.ParseFloat(args[1], 64)
-    if checkErrors(err){return errors.New("Could not parse "+args[1]+" to float")}
+    if checkErrors(err){return nil, errors.New("Could not parse "+args[1]+" to float")}
 
     account.Cash += cashValue
     account.save(stub)
-    return err
+    return nil, err
 }
 
 //==============================================================================================================================
 //     withdrawCash - Transfer cash out of a blockchain account
 //==============================================================================================================================
-func (t *Chaincode) withdrawCash(stub *shim.ChaincodeStub, args []string) error {
-    if len(args) != 2 { return errors.New("Incorrect number of arguments passed") }
+func (t *Chaincode) withdrawCash(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+    //withdrawCash(accountID, value)
+    if len(args) != 2 {return nil, errors.New("Incorrect number of arguments passed")}
 
     account, err := getAccount(stub, args[0])
-    if checkErrors(err){return err}
+    if checkErrors(err){return nil, err}
 
     cashValue, err := strconv.ParseFloat(args[1], 64)
-    if checkErrors(err){return errors.New("Could not parse "+args[1]+" to float")}
+    if checkErrors(err){return nil, errors.New("Could not parse "+args[1]+" to float")}
 
     if account.Cash < cashValue {
-        return errors.New("Not enough cash to withdraw")
+        return nil, errors.New("Not enough cash to withdraw")
     }
     account.Cash -= cashValue
     account.save(stub)
-    return err
+    return nil, err
 }
 
 //==============================================================================================================================
-//     buyUnits - Purchase units of a property
+//     createTrade - Purchase units of a property
 //==============================================================================================================================
-func (t *Chaincode) createBuyTrade(stub *shim.ChaincodeStub, args []string) error {
-    return nil
-}
+func (t *Chaincode) createTrade(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+    //createTrade(trade string) {accountID: "m123456", direction: "S", propertyID: "qwer1234", price: "100.00", units: "10"}
+    if len(args) != 1 {return nil, errors.New("Incorrect number of arguments passed")}
 
-//==============================================================================================================================
-//     sellUnits - Sell units of a property
-//==============================================================================================================================
-func (t *Chaincode) createSellTrade(stub *shim.ChaincodeStub, args []string) error {
-    return nil
-}
-
-//==============================================================================================================================
-//     acceptOffer - buy into a new property issue
-//==============================================================================================================================
-func (t *Chaincode) acceptOffer(stub *shim.ChaincodeStub, args []string) error {
-    return nil
+    return nil, nil
 }
 
 //==============================================================================================================================
 //     createAccount - Create an account for a user
 //==============================================================================================================================
-func (t *Chaincode) createAccount(stub *shim.ChaincodeStub, args []string) error {
-    if len(args) != 1 {return errors.New("Incorrect number of arguments passed")}
+func (t *Chaincode) createAccount(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+
+    if len(args) != 1 {return nil, errors.New("Incorrect number of arguments passed")}
+    accountID := args[0]
+
+    if len(args) != 1 {return nil, errors.New("Incorrect number of arguments passed")}
     var account Account
-    account.ID = args[0]
+    account.ID = accountID
     account.Status = ACCOUNT_STATE_ACTIVE
-    if account.exists(stub) {return errors.New("account already exists")}
-    return account.create(stub)
+    if account.exists(stub) {return nil, errors.New("account already exists")}
+    return nil, account.create(stub)
+}
+
+//==============================================================================================================================
+//     generateOffer - buy into a new property issue
+//==============================================================================================================================
+func (t *Chaincode) generateOffer(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+    //generateOffer(propertyID string, units int)
+    if len(args) != 2 {return nil, errors.New("Incorrect number of arguments passed")}
+    //propertyID := args[0]
+    //units, err := strconv.Atoi(args[1])
+    //if checkErrors(err) {return nil, err}
+
+    return nil, nil
+}
+
+//==============================================================================================================================
+//     acceptOffer - buy into a new property issue
+//==============================================================================================================================
+func (t *Chaincode) acceptOffer(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+    //acceptOffer(offerID string, accountID string)
+    if len(args) != 2 {return nil, errors.New("Incorrect number of arguments passed")}
+    //offerID := args[0]
+    //accountID := args[1]
+
+    return nil, nil
 }
 
 //==============================================================================================================================
 //     issueProperty - Issue a property for trading on the block chain. The property's units will automatically be assigned
 //                     to the account of the issuer
 //==============================================================================================================================
-func (t *Chaincode) issueProperty(stub *shim.ChaincodeStub, args []string) error {
+func (t *Chaincode) issueProperty(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
 
     //    0
     //    json
@@ -327,46 +491,41 @@ func (t *Chaincode) issueProperty(stub *shim.ChaincodeStub, args []string) error
     //
 
     log.debug("check issueProperty args")
-    if len(args) != 1 {return errors.New("Incorrect number of arguments. Expecting property json")}
+    if len(args) != 1 {return nil, errors.New("Incorrect number of arguments. Expecting property json")}
 
     log.debug("unmarshalling " + args[0])
     property, err := unmarshalProperty([]byte(args[0]))
-    if checkErrors(err){return err}
+    if checkErrors(err){return nil, err}
     
     log.debug("creating the property in the blockchain")
     err = property.create(stub)
-    if checkErrors(err){return err}
+    if checkErrors(err){return nil, err}
     
     log.debug("get the account for the issuer " + property.Issuer)
     issuerAccount, err := getAccount(stub, property.Issuer)
-    if checkErrors(err){return err}
+    if checkErrors(err){return nil, err}
 
     log.debug("Set the issuer to be the owner of all units")
-    var issuerHolding Holding
-    issuerHolding.Entity = property.ID
-    issuerHolding.Units = property.Units
-    issuerAccount.Holdings = append(issuerAccount.Holdings, issuerHolding)
+    issuerAccount.changeHolding(property.ID, property.Units)
+    if checkErrors(err){return nil, err}
 
     log.debug("save the issuer's account")
     err = issuerAccount.save(stub)
-    if checkErrors(err){return err}
+    if checkErrors(err){return nil, err}
 
     log.debug("now create an account for the property with an initial view of the holdings")
     var propertyAccount Account
     propertyAccount.ID = property.ID
     propertyAccount.Cash = 0
+    propertyAccount.changeHolding(property.Issuer, property.Units)
+    if checkErrors(err){return nil, err}
 
-    var propertyHolding Holding
-    propertyHolding.Entity = property.Issuer
-    propertyHolding.Units = property.Units
-    propertyAccount.Holdings = append(propertyAccount.Holdings, propertyHolding)
-    
     err = propertyAccount.create(stub)
-    if checkErrors(err){return err}
+    if checkErrors(err){return nil, err}    
     
     log.info("Issued property " + property.ID)
 
-    return nil
+    return nil, nil
 }
 
 //==============================================================================================================================
@@ -424,6 +583,32 @@ func (object *Property) delete(stub *shim.ChaincodeStub) error {
 func (object *Property) exists(stub *shim.ChaincodeStub) bool {
     bytes, err := stub.GetState(PROPERTY_PREFIX + object.ID)
     return bytes != nil || err != nil
+}
+
+func (object *Account) changeHolding(entity string, unitsDelta int) error {
+    var holding Holding
+    var found bool
+    for i := 0; i < len(object.Holdings) && !found; i++ {
+		if object.Holdings[i].Entity == entity {
+            holding = object.Holdings[i]
+            found = true
+        }
+	}
+
+    if !found {
+        holding.Entity = entity
+        object.Holdings = append(object.Holdings, holding)
+    }
+    
+    var finalUnits int
+    finalUnits = holding.Units + unitsDelta
+    if (finalUnits < 0) {
+        return errors.New("There are not enough units to make this trade")
+    }
+
+    holding.Units = finalUnits
+
+    return nil
 }
 
 func (object *Property) validate() error {
@@ -488,6 +673,12 @@ func (object *Account) validate() error {
     return nil
 }
 
+
+//==============================================================================================================================
+//     Trade
+//==============================================================================================================================
+
+
 //==============================================================================================================================
 //     Parsing Subroutines
 //==============================================================================================================================
@@ -498,6 +689,12 @@ func unmarshalProperty(bytes []byte) (Property, error) {
     err := json.Unmarshal(bytes, &object)
     if checkErrors(err){return object, errors.New("Error unmarshalling property")}
     return object, nil
+}
+
+func marshalProperties(objects []Property) ([]byte, error) {
+    bytes, err := json.Marshal(objects)
+    if checkErrors(err){return nil, errors.New("Error marshalling property array")}
+    return bytes, nil
 }
 
 func (object *Property) marshal() ([]byte, error) {
@@ -516,9 +713,37 @@ func unmarshalAccount(bytes []byte) (Account, error) {
     return object, nil
 }
 
+func marshalAccounts(objects []Account) ([]byte, error) {
+    bytes, err := json.Marshal(objects)
+    if checkErrors(err){return nil, errors.New("Error marshalling account array")}
+    return bytes, nil
+}
+
 func (object *Account) marshal() ([]byte, error) {
     bytes, err := json.Marshal(object)
     if checkErrors(err){return nil, errors.New("Error marshalling account")}
+    return bytes, nil
+}
+
+//==============================================================================================================================
+//     Trade
+//==============================================================================================================================
+func unmarshalTrade(bytes []byte) (Trade, error) {
+    var object Trade
+    err := json.Unmarshal(bytes, &object)
+    if checkErrors(err){return object, errors.New("Error unmarshalling trade")}
+    return object, nil
+}
+
+func marshalTrades(objects []Trade) ([]byte, error) {
+    bytes, err := json.Marshal(objects)
+    if checkErrors(err){return nil, errors.New("Error marshalling trade array")}
+    return bytes, nil
+}
+
+func (object *Trade) marshal() ([]byte, error) {
+    bytes, err := json.Marshal(object)
+    if checkErrors(err){return nil, errors.New("Error marshalling trade")}
     return bytes, nil
 }
 
@@ -697,3 +922,22 @@ func (t *Chaincode) get_ecert(stub *shim.ChaincodeStub, name string) ([]byte, er
 
     return []byte(string(cert.OK)), nil
 }
+
+//==============================================================================================================================
+//     Unit Tests
+//==============================================================================================================================
+
+func (t *Chaincode) testAccountCreateSuccess(stub *shim.ChaincodeStub, accountID string) []string {
+    var responses []string
+
+    var account Account
+    account.ID = accountID
+    err := account.create(stub)
+    if checkErrors(err) {
+        responses = append(responses, "COMPLETE: Account created without errors")
+    } else {
+        responses = append(responses, "FAIL: call to create account failed")
+    }
+    return responses
+}
+
