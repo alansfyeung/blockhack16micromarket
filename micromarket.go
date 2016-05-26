@@ -365,10 +365,11 @@ func (t *Chaincode) getAvailableTrades(stub *shim.ChaincodeStub, args []string) 
     //getAvailableTrades()
     if len(args) != 0 {return nil, errors.New("Incorrect number of arguments passed")}
     
-    var propertyIDs, err = getTradingProperties(stub)
+    propertyIDs, err := getTradingProperties(stub)
     if checkErrors(err){return nil, err}
 
     for i:=0;i<len(propertyIDs);i++ {
+        
     }
 
     return nil, nil
@@ -543,6 +544,12 @@ func getTradingProperties(stub *shim.ChaincodeStub) ([]string, error) {
     return propertyIDs, nil
 }
 
+func getPropertyTrades(stub *shim.ChaincodeStub, propertyID string) ([]Trade, error) {
+    var object Property
+    object.ID = propertyID
+    return object.getTrades(stub)
+}
+
 func (object *Property) getTrades(stub *shim.ChaincodeStub) ([]Trade, error) {
     var trades []Trade
     var tradeMap map[string]Trade
@@ -622,6 +629,12 @@ func getAccount(stub *shim.ChaincodeStub, id string) (Account, error) {
     if checkErrors(err){return object, err}
 
     return object, nil
+}
+
+func getAccountTrades(stub *shim.ChaincodeStub, accountID string) ([]Trade, error) {
+    var object Account
+    object.ID = accountID
+    return object.getTrades(stub)
 }
 
 func (object *Account) getTrades(stub *shim.ChaincodeStub) ([]Trade, error) {
