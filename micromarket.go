@@ -287,7 +287,7 @@ func (t *Chaincode) Query(stub *shim.ChaincodeStub, function string, args []stri
 //    Invoke - Called on chaincode invoke. Takes a function name passed and calls that function. Converts some
 //             initial arguments passed to other things for use in the called function e.g. name -> ecert
 //==============================================================================================================================
-func (t *Chaincode) Invoke(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
+func (t *Chaincode) Run(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
     //authenticate the user
     //caller_ecert, caller_role, err := t.get_user_data(stub, args[0])
     //if checkErrors(err){return nil, err}
@@ -322,7 +322,7 @@ func (t *Chaincode) Invoke(stub *shim.ChaincodeStub, function string, args []str
         return t.issueProperty(stub, args)
     } else if function == "generateOffer" {
         return t.generateOffer(stub, args) 
-    } else if function == case "acceptOffer" {
+    } else if function == "acceptOffer" {
         return t.acceptOffer(stub, args)
     } else {
         return nil, errors.New("Invalid function (" + function + ") called")     
