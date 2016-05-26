@@ -1,0 +1,14 @@
+{
+  "name": "chaincode-deployer",
+  "version": "1.0.0",
+  "description": "Deploys using the IBM blockchain JS ",
+  "main": "deploy.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ibm-blockchain-js": "^1.2.3"
+  }
+}
